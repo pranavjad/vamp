@@ -71,7 +71,7 @@ namespace vamp::planning
             auto start_time = std::chrono::steady_clock::now();
 
             // check if the start and goal can be connected directly
-            for (const auto &goal : gaols)
+            for (const auto &goal : goals)
             {
                 if (validate_motion<Robot, rake, resolution>(start, goal, environment))
                 {
@@ -80,8 +80,6 @@ namespace vamp::planning
                     result.nanoseconds = vamp::utils::get_elapsed_nanoseconds(start_time);
                     result.iterations = 0;
                     result.size.emplace_back(1);
-                    result.size.emplace_back(1);
-
                     return result;
                 }
             }
@@ -113,17 +111,61 @@ namespace vamp::planning
                 typename Robot::ConfigurationBuffer sample_config_arr;
                 sample_config.to_array(sample_config_arr.data());
 
-                const auto nearest = tree->nearest(NNFloatArray<dimension>{sample_config_arr.data()})
+                const auto nearest = tree->nearest(NNFloatArray<dimension>{sample_config_arr.data()});
                 if (not nearest)
                 {
                     continue;
                 }
                 const auto &[nearest_node, nearest_distance] = *nearest;
-                auto nearest_configuration = nearest_node.as_vector()
+                auto nearest_configuration = nearest_node.as_vector();
                 auto nearest_vector = sample_config - nearest_configuration;
 
+                bool reach = nearest_distance < settings.range;
+                auto extension_vector = (reach) ? nearest_vector : nearest_vector * (settings.range / nearest_distance);
+
+                if (validate_vector<Robot, rake, reoslution>(
+                    nearest_configuration,
+                    extension_vector,
+                    (reach) ? nearest_distance : settings.range,
+                    environment
+                ))
+                {
+                    float *new_configuration_index = buffer_index(free_index);
+                    auto new_configuration = nearest_configuration + extension_vector;
+                    new_configuration.to_array(new_configuration_index);
+                    tree->insert(NNNode<dimension>{free_index, {new_configuration_index}});
+                    parents[free_index] = nearest_node.index;
+                    free_index++;
+                    
+                    bool goal_reached = false;
+                    // check if we can reach a goal
+                    for (const auto &goal : goals)
+                    {
+                        if (validate_motion<Robot, rake, resolution>(new_configuration, goal, environment))
+                        {
+                            auto current = free_index - 1;
+                            result.path.emplace_back(goal);
+                            while(parents[current] != current) // loop until we hit the root node
+                            {
+                                auto parent = parents[current];
+                                result.path.emplace_back(buffer_index(parent));
+                                auto N = result.path.size();
+                                result.cost += result.path[N - 1].distance(result.path[N - 2]);
+                                current = parent;
+                            }
+                            std::reverse(result.path.begin(), result.path.end());
+                            goal_reached = true;
+                            break;
+                        }
+                    }
+                    if (goal_reached) break;
+                }
             }
+            result.nanoseconds = vamp::utils::get_elapsed_nanoseconds(start_time);
+            result.iterations = iter;
+            result.size.emplace_back(tree.size());
+            return result;
         }
-    }
+    };
 }
 
