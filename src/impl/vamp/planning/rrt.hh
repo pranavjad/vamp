@@ -12,20 +12,13 @@
 #include <vamp/planning/nn.hh>
 #include <vamp/planning/plan.hh>
 #include <vamp/planning/validate.hh>
+#include <vamp/planning/rrt_settings.hh>
 #include <vamp/random/halton.hh>
 #include <vamp/utils.hh>
 #include <vamp/vector.hh>
 
 namespace vamp::planning
 {
-    struct RRTSettings
-    {
-        float range = 2.;
-        std::size_t max_iterations = 100000;
-        std::size_t max_samples = 100000;
-        std::size_t rng_skip_iterations = 0;
-    };
-
     template <typename Robot, typename RNG, std::size_t rake, std::size_t resolution>
     struct RRT
     {
@@ -34,9 +27,20 @@ namespace vamp::planning
         // dimension of robot configuration space
         static constexpr auto dimension = Robot::dimension;
 
+        // case where we only have one goal
         inline static auto solve(
             const Configuration &start,
-            const Configuration &goals,
+            const Configuration &goal,
+            const collision::Environment<FloatVector<rake>> &environment,
+            const RRTSettings &settings
+        ) -> PlanningResult<dimension>
+        {
+            return solve(start, std::vector<Configuration>{goal}, environment, settings);
+        }
+
+        inline static auto solve(
+            const Configuration &start,
+            const std::vector<Configuration> &goals,
             const collision::Environment<FloatVector<rake>> &environment,
             const RRTSettings &settings
         ) -> PlanningResult<dimension>
@@ -90,28 +94,28 @@ namespace vamp::planning
 
             // add start to tree
             start.to_array(buffer_index(start_index));
-            start_tree.insert(NNNode<dimension>{start_index, {buffer_index(start_index)}});
+            tree.insert(NNNode<dimension>{start_index, {buffer_index(start_index)}});
             parents[start_index] = start_index;
             
-            // add goals to tree
-            for (const auto &goal : goals)
-            {
-                goal.to_array(buffer_index(free_index));
-                goal_tree.insert(NNNode<dimension>{free_index, {buffer_index(free_index)}});
-                parents[free_index] = free_index;
-                free_index++;
-            }
+            // // add goals to tree
+            // for (const auto &goal : goals)
+            // {
+            //     goal.to_array(buffer_index(free_index));
+            //     goal_tree.insert(NNNode<dimension>{free_index, {buffer_index(free_index)}});
+            //     parents[free_index] = free_index;
+            //     free_index++;
+            // }
 
             // main RRT loop
             std::size_t iter = 0;
             while (iter++ < settings.max_iterations and free_index < settings.max_samples) {
                 // sample a new configuration
                 auto sample_config = rng.next();
-                Robot::scale_configuration(sample_config)
+                Robot::scale_configuration(sample_config);
                 typename Robot::ConfigurationBuffer sample_config_arr;
                 sample_config.to_array(sample_config_arr.data());
 
-                const auto nearest = tree->nearest(NNFloatArray<dimension>{sample_config_arr.data()});
+                const auto nearest = tree.nearest(NNFloatArray<dimension>{sample_config_arr.data()});
                 if (not nearest)
                 {
                     continue;
@@ -123,7 +127,7 @@ namespace vamp::planning
                 bool reach = nearest_distance < settings.range;
                 auto extension_vector = (reach) ? nearest_vector : nearest_vector * (settings.range / nearest_distance);
 
-                if (validate_vector<Robot, rake, reoslution>(
+                if (validate_vector<Robot, rake, resolution>(
                     nearest_configuration,
                     extension_vector,
                     (reach) ? nearest_distance : settings.range,
@@ -133,7 +137,7 @@ namespace vamp::planning
                     float *new_configuration_index = buffer_index(free_index);
                     auto new_configuration = nearest_configuration + extension_vector;
                     new_configuration.to_array(new_configuration_index);
-                    tree->insert(NNNode<dimension>{free_index, {new_configuration_index}});
+                    tree.insert(NNNode<dimension>{free_index, {new_configuration_index}});
                     parents[free_index] = nearest_node.index;
                     free_index++;
                     
