@@ -16,6 +16,7 @@ __all__ = [
     "Cylinder",
     "RRTCSettings",
     "RRTSettings",
+    "RRT_star_settings",
     "PRMSettings",
     "PRMNeighborParams",
     "SimplifySettings",
@@ -39,6 +40,7 @@ from ._core import PRMNeighborParams as PRMNeighborParams
 from ._core import PRMSettings as PRMSettings
 from ._core import RRTCSettings as RRTCSettings
 from ._core import RRTSettings as RRTSettings
+from ._core import RRT_star_settings as RRT_star_settings
 from ._core import SimplifyRoutine as SimplifyRoutine
 from ._core import SimplifySettings as SimplifySettings
 from ._core import Sphere as Sphere
@@ -85,6 +87,9 @@ def configure_robot_and_planner_with_kwargs(robot_name: str, planner_name: str, 
         plan_settings.range = ROBOT_RRT_RANGES[robot_name]
     elif planner_name == "rrt":
         plan_settings = RRTSettings()
+        plan_settings.range = ROBOT_RRT_RANGES[robot_name]
+    elif planner_name == "rrt*":
+        plan_settings = RRT_star_settings()
         plan_settings.range = ROBOT_RRT_RANGES[robot_name]
     elif planner_name == "prm":
         plan_settings = PRMSettings(PRMNeighborParams(robot_module.dimension(), robot_module.space_measure()))

@@ -1,6 +1,7 @@
 #include <vamp/planning/roadmap.hh>
 #include <vamp/planning/rrtc_settings.hh>
 #include <vamp/planning/rrt_settings.hh>
+#include <vamp/planning/rrt_star_settings.hh>
 #include <vamp/planning/simplify_settings.hh>
 #include <vamp/bindings/init.hh>
 
@@ -31,6 +32,13 @@ void vamp::binding::init_settings(nanobind::module_ &pymodule)
         .def_rw("max_iterations", &vp::RRTSettings::max_iterations)
         .def_rw("max_samples", &vp::RRTSettings::max_samples)
         .def_rw("rng_skip_iterations", &vp::RRTSettings::rng_skip_iterations);
+    
+    nb::class_<vp::RRT_star_settings>(pymodule, "RRTSettings")
+        .def(nb::init<>())
+        .def_rw("range", &vp::RRT_star_settings::range)
+        .def_rw("max_iterations", &vp::RRT_star_settings::max_iterations)
+        .def_rw("max_samples", &vp::RRT_star_settings::max_samples)
+        .def_rw("rng_skip_iterations", &vp::RRT_star_settings::rng_skip_iterations);
     
     // TODO: Redesign a neater form of RoadmapSettings/NeighborParams
     // TODO: Expose the other NeighborParams types

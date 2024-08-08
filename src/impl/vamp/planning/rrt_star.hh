@@ -1,39 +1,30 @@
-/*
- * RRT implementation excercise.
- * Author: Pranav Jadhav
- * Version: Jul 16, 2024
- */
-
 #pragma once
 
 #include <memory>
-
 #include <vamp/collision/environment.hh>
 #include <vamp/planning/nn.hh>
 #include <vamp/planning/plan.hh>
 #include <vamp/planning/validate.hh>
-#include <vamp/planning/rrt_settings.hh>
+#include <vamp/planning/rrt_star_settings.hh>
 #include <vamp/random/halton.hh>
 #include <vamp/utils.hh>
 #include <vamp/vector.hh>
+#include <cmath>
 
 namespace vamp::planning
 {
     template <typename Robot, typename RNG, std::size_t rake, std::size_t resolution>
-    struct RRT
+    struct RRT_star
     {
-        // robot configuration object - ex. for a pandas it is a length 7 FloatVector
         using Configuration = typename Robot::Configuration;
-        // dimension of robot configuration space
         static constexpr auto dimension = Robot::dimension;
+        static constexpr auto space_measure = Robot::space_measure;
 
-        // case where we only have one goal
         inline static auto solve(
             const Configuration &start,
             const Configuration &goal,
             const collision::Environment<FloatVector<rake>> &environment,
-            const RRTSettings &settings
-        ) -> PlanningResult<dimension>
+            const RRT_star_settings &settings) noexcept -> PlanningResult<dimension>
         {
             return solve(start, std::vector<Configuration>{goal}, environment, settings);
         }
@@ -49,13 +40,6 @@ namespace vamp::planning
             NN<dimension> tree;
             constexpr const std::size_t start_index = 0;
 
-            /*
-             * A chunk of memory to hold all the states in our tree.
-             * num_scalars_rounded is the config dimension rounded up
-             * to the nearest byte boundary. The reason for this is because
-             * the vectors should be aligned to load into SIMD for optimal
-             * performance.
-             */
             auto buffer = std::unique_ptr<float, decltype(&free)>(
                 vamp::utils::vector_alloc<float, FloatVectorAlignment, FloatVectorWidth>(
                     settings.max_samples * Configuration::num_scalars_rounded
@@ -63,17 +47,15 @@ namespace vamp::planning
                 &free
             );
 
-            // function to index the buffer
             const auto buffer_index = [&buffer](std::size_t index) -> float *
             {
                 return buffer.get() + index * Configuration::num_scalars_rounded;
             };
 
             std::vector<std::size_t> parents(settings.max_samples);
-
+            std::vector<double> cost(settings.max_samples);
             auto start_time = std::chrono::steady_clock::now();
 
-            // check if the start and goal can be connected directly
             for (const auto &goal : goals)
             {
                 if (validate_motion<Robot, rake, resolution>(start, goal, environment))
@@ -87,19 +69,20 @@ namespace vamp::planning
                 }
             }
 
-            // random number generation for sampling new states
             RNG rng(settings.rng_skip_iterations);
             std::size_t free_index = start_index + 1;
 
-            // add start to tree
             start.to_array(buffer_index(start_index));
             tree.insert(NNNode<dimension>{start_index, {buffer_index(start_index)}});
             parents[start_index] = start_index;
+            cost[start_index] = 0.0;
 
-            // main RRT loop
+            // main loop
             std::size_t iter = 0;
+            double unit_ball_volume = unitNballMeasure(dimension);
             while (iter++ < settings.max_iterations and free_index < settings.max_samples) {
-                // sample a new configuration
+
+                // sample random config
                 auto sample_config = rng.next();
                 Robot::scale_configuration(sample_config);
                 typename Robot::ConfigurationBuffer sample_config_arr;
@@ -110,6 +93,8 @@ namespace vamp::planning
                 {
                     continue;
                 }
+
+                // steer (calculate next state within range)
                 const auto &[nearest_node, nearest_distance] = *nearest;
                 auto nearest_configuration = nearest_node.as_vector();
                 auto nearest_vector = sample_config - nearest_configuration;
@@ -124,13 +109,67 @@ namespace vamp::planning
                     environment
                 ))
                 {
+                    // insert new config into vertex set
                     float *new_configuration_index = buffer_index(free_index);
                     auto new_configuration = nearest_configuration + extension_vector;
                     new_configuration.to_array(new_configuration_index);
                     tree.insert(NNNode<dimension>{free_index, {new_configuration_index}});
-                    parents[free_index] = nearest_node.index;
-                    free_index++;
+
+                    // sample points in graph within radius r of new config
+                    // https://github.com/UNC-Robotics/nigh?tab=readme-ov-file#searching
+                    double free_volume = space_measure;
+                    std::size_t card = tree.size();
+                    double dim_recip = 1.0 / dimension;
+                    // https://github.com/ompl/ompl/blob/af4d6d625e15a4ed6d85255c718ce26bcd79e4cc/src/ompl/geometric/planners/rrt/src/RRTstar.cpp#L1168C5-L1168C11
+                    double gamma_rrt = pow(2 * (1.0 + 1.0 / dimension) * (free_volume / unit_ball_volume), dim_recip);
+                    double rrt_radius = std::min(
+                        gamma_rrt * pow((log(card) / card), dim_recip),
+                        settings.range
+                    );
+                    // tree.nearest returns a vector of pair<Node, Distance>
+                    const auto near = tree.nearest(NNFloatArray<dimension>{sample_config_arr.data()}, card, rrt_radius);
+
                     
+                    // initialize variables to keep track of the min cost neighbor and the cost of that neighbor
+                    auto min_neighbor = nearest_node;
+                    double min_cost = cost[nearest_node.index] + nearest_distance;
+
+                    // loop through near neighbors, find the one that gives us min cost from root
+                    std::vector<bool> collision_free(near.size());
+                    std::size_t idx = 0;
+                    for (auto &[node, distance] : near) {
+                        auto configuration = node.as_vector();
+                        auto extension_vector = new_configuration - configuration;
+                        collision_free[idx] = validate_vector<Robot, rake, resolution>(
+                            configuration,
+                            extension_vector,
+                            distance,
+                            environment
+                        );
+                        double cost = cost[node.index] + distance;
+                        if ((cost < min_cost) && collision_free) {
+                            min_cost = cost;
+                            min_neighbor = node;
+                        }
+                        idx++;
+                    }
+
+                    // add an edge from min cost neighbor to new config
+                    parents[free_index] = min_neighbor.index;
+                    cost[free_index] = min_cost;
+                    
+                    // rewire with our newly added node to see if any neighbors can be routed through it
+                    // to get a shorter path to that neighbor
+                    idx = 0;
+                    for (auto &[node, distance] : near) {
+                        if ((min_cost + distance < cost[node.index]) && collision_free[idx]) {
+                            parents[node.index] = free_index;
+                        }
+                        idx++;
+                    }
+
+                    free_index++;
+        
                     bool goal_reached = false;
                     // check if we can reach a goal
                     for (const auto &goal : goals)
@@ -155,11 +194,16 @@ namespace vamp::planning
                     if (goal_reached) break;
                 }
             }
+
             result.nanoseconds = vamp::utils::get_elapsed_nanoseconds(start_time);
             result.iterations = iter;
             result.size.emplace_back(tree.size());
             return result;
         }
-    };
-}
 
+        double unitNballMeasure(unsigned int N)
+        {
+            return std::pow(std::sqrt(M_PI), static_cast<double>(N)) / std::tgamma(static_cast<double>(N) / 2.0 + 1.0);
+        }
+    }
+}
