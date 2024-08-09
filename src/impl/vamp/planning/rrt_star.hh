@@ -33,7 +33,7 @@ namespace vamp::planning
             const Configuration &start,
             const std::vector<Configuration> &goals,
             const collision::Environment<FloatVector<rake>> &environment,
-            const RRTSettings &settings
+            const RRT_star_settings &settings
         ) -> PlanningResult<dimension>
         {
             PlanningResult<dimension> result;
@@ -53,7 +53,7 @@ namespace vamp::planning
             };
 
             std::vector<std::size_t> parents(settings.max_samples);
-            std::vector<double> cost(settings.max_samples);
+            std::vector<float> cost(settings.max_samples);
             auto start_time = std::chrono::steady_clock::now();
 
             for (const auto &goal : goals)
@@ -79,7 +79,7 @@ namespace vamp::planning
 
             // main loop
             std::size_t iter = 0;
-            double unit_ball_volume = unitNballMeasure(dimension);
+            float unit_ball_volume = unitNballMeasure(dimension);
             while (iter++ < settings.max_iterations and free_index < settings.max_samples) {
 
                 // sample random config
@@ -117,22 +117,24 @@ namespace vamp::planning
 
                     // sample points in graph within radius r of new config
                     // https://github.com/UNC-Robotics/nigh?tab=readme-ov-file#searching
-                    double free_volume = space_measure;
+                    float free_volume = space_measure();
                     std::size_t card = tree.size();
-                    double dim_recip = 1.0 / dimension;
+                    float dim_recip = 1.0 / dimension;
                     // https://github.com/ompl/ompl/blob/af4d6d625e15a4ed6d85255c718ce26bcd79e4cc/src/ompl/geometric/planners/rrt/src/RRTstar.cpp#L1168C5-L1168C11
-                    double gamma_rrt = pow(2 * (1.0 + 1.0 / dimension) * (free_volume / unit_ball_volume), dim_recip);
-                    double rrt_radius = std::min(
+                    float gamma_rrt = pow(2 * (1.0 + 1.0 / dimension) * (free_volume / unit_ball_volume), dim_recip);
+                    float rrt_radius = std::fmin(
                         gamma_rrt * pow((log(card) / card), dim_recip),
                         settings.range
                     );
                     // tree.nearest returns a vector of pair<Node, Distance>
-                    const auto near = tree.nearest(NNFloatArray<dimension>{sample_config_arr.data()}, card, rrt_radius);
+                    // https://github.com/UNC-Robotics/nigh?tab=readme-ov-file#searching
+                    std::vector<std::pair<NNNode<dimension>, float>> near;
+                    tree.nearest(near, NNFloatArray<dimension>{sample_config_arr.data()}, 1000, rrt_radius);
 
                     
                     // initialize variables to keep track of the min cost neighbor and the cost of that neighbor
                     auto min_neighbor = nearest_node;
-                    double min_cost = cost[nearest_node.index] + nearest_distance;
+                    float min_cost = cost[nearest_node.index] + nearest_distance;
 
                     // loop through near neighbors, find the one that gives us min cost from root
                     std::vector<bool> collision_free(near.size());
@@ -146,9 +148,9 @@ namespace vamp::planning
                             distance,
                             environment
                         );
-                        double cost = cost[node.index] + distance;
-                        if ((cost < min_cost) && collision_free) {
-                            min_cost = cost;
+                        float cur_cost = cost[node.index] + distance;
+                        if ((cur_cost < min_cost) && collision_free[idx]) {
+                            min_cost = cur_cost;
                             min_neighbor = node;
                         }
                         idx++;
@@ -201,9 +203,9 @@ namespace vamp::planning
             return result;
         }
 
-        double unitNballMeasure(unsigned int N)
+        inline static auto unitNballMeasure(unsigned int N) -> float
         {
-            return std::pow(std::sqrt(M_PI), static_cast<double>(N)) / std::tgamma(static_cast<double>(N) / 2.0 + 1.0);
+            return std::pow(std::sqrt(M_PI), N) / std::tgamma(N / 2.0 + 1.0);
         }
-    }
+    };
 }

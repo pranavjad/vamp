@@ -60,6 +60,7 @@ def main(
                 e.add_sphere(vamp.Sphere(sphere, radius))
 
             if vamp.panda.validate(a, e) and vamp.panda.validate(b, e):
+                # result = planner_func(a, b, e, plan_settings)
                 result = planner_func(a, b, e, plan_settings)
                 simple = vamp_module.simplify(result.path, e, simp_settings)
                 results.append(vamp.results_to_dict(result, simple))

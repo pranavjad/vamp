@@ -521,7 +521,7 @@ namespace vamp::binding
             "Solve the motion planning problem with RRT.");
         
         submodule.def(
-            "rrt_star_single",
+            "rrt_star",
             RH::rrt_star_single,
             "start"_a,
             "goal"_a,
