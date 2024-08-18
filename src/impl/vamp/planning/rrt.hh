@@ -139,6 +139,8 @@ namespace vamp::planning
                         {
                             auto current = free_index - 1;
                             result.path.emplace_back(goal);
+                            result.path.emplace_back(new_configuration);
+                            result.cost = goal.distance(new_configuration);
                             while(parents[current] != current) // loop until we hit the root node
                             {
                                 auto parent = parents[current];

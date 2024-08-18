@@ -12,6 +12,9 @@ a = [0., -0.785, 0., -2.356, 0., 1.571, 0.785]
 # Goal configuration
 b = [2.35, 1., 0., -0.8, 0, 2.5, 0.785]
 
+print("optimal cost: ", np.sqrt(sum([(a[i] - b[i])**2 for i in range(len(a))])))
+
+
 # Problem specification: a list of sphere centers
 problem = [
     [0.55, 0, 0.25],
@@ -43,7 +46,11 @@ def main(
 
     (vamp_module, planner_func, plan_settings,
      simp_settings) = vamp.configure_robot_and_planner_with_kwargs("panda", planner, **kwargs)
-
+    
+    # rrt* settings
+    # plan_settings.max_iterations = 100000
+    # plan_settings.force_max_iters = True
+    # plan_settings.range = 3.0
     if benchmark:
         random.seed(0)
         np.random.seed(0)
@@ -60,7 +67,6 @@ def main(
                 e.add_sphere(vamp.Sphere(sphere, radius))
 
             if vamp.panda.validate(a, e) and vamp.panda.validate(b, e):
-                # result = planner_func(a, b, e, plan_settings)
                 result = planner_func(a, b, e, plan_settings)
                 simple = vamp_module.simplify(result.path, e, simp_settings)
                 results.append(vamp.results_to_dict(result, simple))

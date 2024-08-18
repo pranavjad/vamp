@@ -10,6 +10,7 @@
 #include <vamp/utils.hh>
 #include <vamp/vector.hh>
 #include <cmath>
+#include <iostream>
 
 namespace vamp::planning
 {
@@ -52,8 +53,30 @@ namespace vamp::planning
                 return buffer.get() + index * Configuration::num_scalars_rounded;
             };
 
-            std::vector<std::size_t> parents(settings.max_samples);
-            std::vector<float> cost(settings.max_samples);
+            std::vector<std::size_t> parent(settings.max_samples);
+            std::vector<std::vector<std::size_t>> children(settings.max_samples, std::vector<std::size_t>());
+            std::vector<float> cost(settings.max_samples, -1.0);
+
+            const auto add_edge = [&parent, &children](std::size_t parent_node, std::size_t child_node) -> void
+            {
+                parent[child_node] = parent_node;
+                children[parent_node].push_back(child_node);
+            };
+            const auto remove_edge = [&parent, &children](std::size_t parent_node, std::size_t child_node) -> void
+            {
+                parent[child_node] = -1;
+                auto it = std::find(children[parent_node].begin(), children[parent_node].end(), child_node);
+                if (it != children[parent_node].end()) children[parent_node].erase(it);
+            };
+            std::function<void(std::size_t)> update_children = [&cost, &children, &buffer_index, &update_children](std::size_t idx)
+            {
+                Configuration cur(buffer_index(idx));
+                for (auto &child : children[idx]) {
+                    cost[child] = cost[idx] + cur.distance(buffer_index(child));
+                    update_children(child);
+                }
+            };
+
             auto start_time = std::chrono::steady_clock::now();
 
             for (const auto &goal : goals)
@@ -72,16 +95,20 @@ namespace vamp::planning
             RNG rng(settings.rng_skip_iterations);
             std::size_t free_index = start_index + 1;
 
+            // add start to tree
             start.to_array(buffer_index(start_index));
             tree.insert(NNNode<dimension>{start_index, {buffer_index(start_index)}});
-            parents[start_index] = start_index;
+            parent[start_index] = start_index;
             cost[start_index] = 0.0;
 
+            std::vector<std::pair<std::size_t, Configuration>> goal_motions;
+            float best_path_cost = std::numeric_limits<float>::max();
+            std::pair<std::size_t, Configuration> best_goal_motion;
             // main loop
             std::size_t iter = 0;
             float unit_ball_volume = unitNballMeasure(dimension);
+            std::vector<std::pair<NNNode<dimension>, float>> near;
             while (iter++ < settings.max_iterations and free_index < settings.max_samples) {
-
                 // sample random config
                 auto sample_config = rng.next();
                 Robot::scale_configuration(sample_config);
@@ -96,6 +123,7 @@ namespace vamp::planning
 
                 // steer (calculate next state within range)
                 const auto &[nearest_node, nearest_distance] = *nearest;
+                // std::cout << "nearest_node cost: " << cost[nearest_node.index] << "\n";
                 auto nearest_configuration = nearest_node.as_vector();
                 auto nearest_vector = sample_config - nearest_configuration;
 
@@ -110,27 +138,30 @@ namespace vamp::planning
                 ))
                 {
                     // insert new config into vertex set
-                    float *new_configuration_index = buffer_index(free_index);
+                    float *new_configuration_ptr = buffer_index(free_index);
                     auto new_configuration = nearest_configuration + extension_vector;
-                    new_configuration.to_array(new_configuration_index);
-                    tree.insert(NNNode<dimension>{free_index, {new_configuration_index}});
+                    new_configuration.to_array(new_configuration_ptr);
+                    NNNode<dimension> new_node({free_index, {new_configuration_ptr}});
+                    // tree.insert(new_node);
 
                     // sample points in graph within radius r of new config
                     // https://github.com/UNC-Robotics/nigh?tab=readme-ov-file#searching
                     float free_volume = space_measure();
-                    std::size_t card = tree.size();
+                    std::size_t card = tree.size() + 1; //plus 1 to account for the new configuration not inserted yet
                     float dim_recip = 1.0 / dimension;
                     // https://github.com/ompl/ompl/blob/af4d6d625e15a4ed6d85255c718ce26bcd79e4cc/src/ompl/geometric/planners/rrt/src/RRTstar.cpp#L1168C5-L1168C11
                     float gamma_rrt = pow(2 * (1.0 + 1.0 / dimension) * (free_volume / unit_ball_volume), dim_recip);
-                    float rrt_radius = std::fmin(
-                        gamma_rrt * pow((log(card) / card), dim_recip),
-                        settings.range
-                    );
+                    float rrt_radius = settings.range;
+                    // float rrt_radius = std::fmin(
+                    //     settings.rewire_factor * gamma_rrt * pow((log(card) / card), dim_recip),
+                    //     settings.range
+                    // );
                     // tree.nearest returns a vector of pair<Node, Distance>
                     // https://github.com/UNC-Robotics/nigh?tab=readme-ov-file#searching
-                    std::vector<std::pair<NNNode<dimension>, float>> near;
-                    tree.nearest(near, NNFloatArray<dimension>{sample_config_arr.data()}, 1000, rrt_radius);
-
+                    
+                    tree.nearest(near, NNFloatArray<dimension>{new_configuration_ptr}, 10000, rrt_radius);
+                    // tree.nearest(near, NNFloatArray<dimension>{new_configuration}, 10000, rrt_radius);
+                    // std::cout << "near.size(): " << near.size() << "\n";
                     
                     // initialize variables to keep track of the min cost neighbor and the cost of that neighbor
                     auto min_neighbor = nearest_node;
@@ -142,13 +173,17 @@ namespace vamp::planning
                     for (auto &[node, distance] : near) {
                         auto configuration = node.as_vector();
                         auto extension_vector = new_configuration - configuration;
-                        collision_free[idx] = validate_vector<Robot, rake, resolution>(
-                            configuration,
-                            extension_vector,
-                            distance,
-                            environment
+                        collision_free[idx] = validate_motion<Robot, rake, resolution>(
+                            configuration, new_configuration, environment
                         );
+                        // collision_free[idx] = validate_vector<Robot, rake, resolution>(
+                        //     configuration,
+                        //     extension_vector,
+                        //     distance,
+                        //     environment
+                        // );
                         float cur_cost = cost[node.index] + distance;
+                        // std::cout << "cost[nbh]: " << cost[node.index] << ", dist to nbh: " << distance << "\n";
                         if ((cur_cost < min_cost) && collision_free[idx]) {
                             min_cost = cur_cost;
                             min_neighbor = node;
@@ -157,15 +192,24 @@ namespace vamp::planning
                     }
 
                     // add an edge from min cost neighbor to new config
-                    parents[free_index] = min_neighbor.index;
+                    tree.insert(new_node);
+                    add_edge(min_neighbor.index, free_index);
                     cost[free_index] = min_cost;
                     
-                    // rewire with our newly added node to see if any neighbors can be routed through it
-                    // to get a shorter path to that neighbor
+                    // rewire with our newly added node to if we can use it to get a shorter path
+                    // to any of it's neighbors
                     idx = 0;
+                    bool check_new_best = false;
                     for (auto &[node, distance] : near) {
                         if ((min_cost + distance < cost[node.index]) && collision_free[idx]) {
-                            parents[node.index] = free_index;
+                            remove_edge(parent[node.index], node.index);
+                            add_edge(free_index, node.index);
+
+                            // propgate saved cost to children
+                            cost[node.index] = min_cost + distance;
+                            // std::cout << "new cost: " << cost[node.index] << "\n";
+                            update_children(node.index);
+                            check_new_best = true;
                         }
                         idx++;
                     }
@@ -178,25 +222,64 @@ namespace vamp::planning
                     {
                         if (validate_motion<Robot, rake, resolution>(new_configuration, goal, environment))
                         {
-                            auto current = free_index - 1;
-                            result.path.emplace_back(goal);
-                            while(parents[current] != current) // loop until we hit the root node
-                            {
-                                auto parent = parents[current];
-                                result.path.emplace_back(buffer_index(parent));
-                                auto N = result.path.size();
-                                result.cost += result.path[N - 1].distance(result.path[N - 2]);
-                                current = parent;
+                            if (!settings.force_max_iters) { // found a solution, exit the algorithm
+                                auto current = free_index - 1;
+                                result.path.emplace_back(goal);
+                                result.path.emplace_back(new_configuration);
+                                result.cost = cost[current] + goal.distance(buffer_index(current));
+                                while(parent[current] != current) // build path
+                                {
+                                    auto parent_node = parent[current];
+                                    result.path.emplace_back(buffer_index(parent_node));
+                                    current = parent_node;
+                                }
+                                std::reverse(result.path.begin(), result.path.end());
+                                goal_reached = true;
+                                break;
                             }
-                            std::reverse(result.path.begin(), result.path.end());
-                            goal_reached = true;
-                            break;
+                            else {
+                                auto current = free_index - 1;
+                                goal_motions.push_back({current, goal});
+                                check_new_best = true;
+                            }
                         }
                     }
-                    if (goal_reached) break;
+                    if (!settings.force_max_iters && goal_reached) break;
+                    if (settings.force_max_iters && check_new_best) {
+                        // loop through goal nodes to find the best solution
+                        for (auto &[end_node_idx, goal]: goal_motions) {
+                            float cur_cost = cost[end_node_idx] + goal.distance(buffer_index(end_node_idx));
+                            // std::cout << "potential new best cost: " << cur_cost << ", best cost: " << best_path_cost << "\n";
+                            if (cur_cost < best_path_cost) {
+                                best_path_cost = cur_cost;
+                                best_goal_motion = {end_node_idx, goal};
+                                std::cout << "New best path found with cost: " << best_path_cost << " at iter " << iter << std::endl;                   
+                            }
+                        }
+                    }
                 }
             }
-
+            if (!settings.force_max_iters) {
+                result.nanoseconds = vamp::utils::get_elapsed_nanoseconds(start_time);
+                result.iterations = iter;
+                result.size.emplace_back(tree.size());
+                return result;
+            }
+            if (goal_motions.size() > 0) {
+                result.cost = best_path_cost;
+                auto &[best_end_node_idx, best_goal] = best_goal_motion;
+                result.path.emplace_back(best_goal);
+                result.path.emplace_back(buffer_index(best_end_node_idx));
+                auto current = best_end_node_idx;
+                while(parent[current] != current) // build path
+                {
+                    auto parent_node = parent[current];
+                    result.path.emplace_back(buffer_index(parent_node));
+                    current = parent_node;
+                }
+                // result.path.emplace_back(start);
+                std::reverse(result.path.begin(), result.path.end());
+            }
             result.nanoseconds = vamp::utils::get_elapsed_nanoseconds(start_time);
             result.iterations = iter;
             result.size.emplace_back(tree.size());

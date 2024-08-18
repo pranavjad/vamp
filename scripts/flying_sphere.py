@@ -13,7 +13,7 @@ def main(
         y: float = 20,
         z: float = 1,
         radius: float = 0.1,
-        iterations: int = 10000
+        iterations: int = 100
     ):
 
     env = vamp.Environment()
