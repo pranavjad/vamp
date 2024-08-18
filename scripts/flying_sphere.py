@@ -39,6 +39,8 @@ def main(
 
     if visualize:
         from vamp import pybullet_interface as vpb
+        import pybullet
+        
         pb = vpb.PyBulletSimulator("", [], True)
 
         pb.draw_roadmap(vamp.sphere.fk, roadmap)
@@ -49,8 +51,8 @@ def main(
 
         pb.set_camera([x + 1, y + 1, z + 1], [0, 0, 0])
 
-        while True:
-            ...
+        while pybullet.isConnected():
+            pybullet.stepSimulation()
 
 
 if __name__ == "__main__":
