@@ -13,7 +13,7 @@ def main(
         y: float = 20,
         z: float = 1,
         radius: float = 0.1,
-        iterations: int = 100
+        iterations: int = 10000
     ):
 
     env = vamp.Environment()
@@ -40,7 +40,6 @@ def main(
     if visualize:
         from vamp import pybullet_interface as vpb
         import pybullet
-        
         pb = vpb.PyBulletSimulator("", [], True)
 
         pb.draw_roadmap(vamp.sphere.fk, roadmap)

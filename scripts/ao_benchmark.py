@@ -50,12 +50,14 @@ def main(
 
     all_results = []
     spheres = [np.array(sphere) for sphere in problem]
-    max_iters = np.arange(500, 10000, 250)
+    max_iters = np.arange(1, 100000, 1000)
 
     env = vamp.Environment()
     for sphere in spheres:
         env.add_sphere(vamp.Sphere(sphere, radius))
-    plan_settings.force_max_iters = False
+    
+    plan_settings.force_max_iters = True
+    plan_settings.range = 3.0
     for iters in max_iters:
         plan_settings.max_iterations = iters
         plan_settings.max_samples = iters

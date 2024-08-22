@@ -307,12 +307,12 @@ class PyBulletSimulator:
                     )
 
     def draw_roadmap(self, fk_function, roadmap):
-        with DisableRendering(self.client), RedirectStream(sys.stdout), RedirectStream(sys.stderr):
-            for i, edge_list in enumerate(roadmap.edges):
-                for edge in edge_list:
-                    a = fk_function(roadmap[i].to_list())[-1]
-                    b = fk_function(roadmap[edge].to_list())[-1]
-                    self.client.addUserDebugLine([a.x, a.y, a.z], [b.x, b.y, b.z])
+        # with DisableRendering(self.client), RedirectStream(sys.stdout), RedirectStream(sys.stderr):
+        for i, edge_list in enumerate(roadmap.edges):
+            for edge in edge_list:
+                a = fk_function(roadmap[i].to_list())[-1]
+                b = fk_function(roadmap[edge].to_list())[-1]
+                self.client.addUserDebugLine([a.x, a.y, a.z], [b.x, b.y, b.z])
 
     def draw_pointcloud(self, pc, lifetime: float = 0.):
         maxes = np.max(pc, axis = 0)
