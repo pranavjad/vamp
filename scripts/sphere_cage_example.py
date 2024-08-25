@@ -50,7 +50,8 @@ def main(
     # rrt* settings
     # plan_settings.max_iterations = 100000
     # plan_settings.force_max_iters = True
-    # plan_settings.range = 3.0
+    # plan_settings.range = 5.0
+    # plan_settings.rewire_factor = 3.0
     if benchmark:
         random.seed(0)
         np.random.seed(0)
