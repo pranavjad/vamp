@@ -7,6 +7,11 @@ option(VAMP_FORCE_CLANG "Force the use of Clang." OFF)
 option(VAMP_BUILD_OMPL_DEMO "Build VAMP C++ OMPL Integration Demo Script" OFF)
 option(VAMP_OMPL_PATH "Search Path for OMPL Installation - Only Needed for Demo Script" "")
 
+# option(VAMP_METAL_CPP_PATH "Path to Metal C++ headers" "")
+option(VAMP_BUILD_GPU_DEMO "Build VAMP C++ Batched Collision Checking on GPU Script" ON)
+set(VAMP_METAL_CPP_PATH "/Users/pranavj/Documents/coding/zaklab/vamp/metal-cpp")
+
+
 if(VAMP_FORCE_CLANG)
   find_program(CLANG "clang")
   find_program(CLANGPP "clang++")
@@ -44,6 +49,17 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerSettings)
 include(FetchInitCPM)
 include(Dependencies)
+
+# metal stuff
+if(NOT VAMP_METAL_CPP_PATH)
+  message(FATAL_ERROR "VAMP_METAL_CPP_PATH is not set. Please specify the path to the Metal C++ headers.")
+endif()
+
+include_directories(${VAMP_METAL_CPP_PATH})
+
+find_library(METAL_LIBRARY Metal)
+find_library(FOUNDATION_LIBRARY Foundation)
+find_library(QUARTZ_CORE_LIBRARY QuartzCore)
 
 list(APPEND VAMP_EXT_SOURCES
   src/impl/vamp/bindings/python.cc
@@ -84,6 +100,9 @@ target_include_directories(_core_ext
 target_link_libraries(_core_ext
     PRIVATE
     Eigen3::Eigen
+    ${METAL_LIBRARY}
+    ${FOUNDATION_LIBRARY}
+    ${QUARTZ_CORE_LIBRARY}
 )
 
 if($ENV{GITHUB_ACTIONS})
@@ -140,4 +159,8 @@ if(VAMP_BUILD_OMPL_DEMO)
   else()
     message(WARNING "OMPL not found! Cannot build OMPL demo.")
   endif()
+endif()
+
+if(VAMP_BUILD_GPU_DEMO)
+  add_executable(vamp_gpu_demo scripts/cpp/batched_cc.cc)
 endif()
