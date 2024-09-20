@@ -1,15 +1,17 @@
 #pragma once
 
-#define NS_PRIVATE_IMPLEMENTATION
-#define CA_PRIVATE_IMPLEMENTATION
-#define MTL_PRIVATE_IMPLEMENTATION
+// #define NS_PRIVATE_IMPLEMENTATION
+// #define CA_PRIVATE_IMPLEMENTATION
+// #define MTL_PRIVATE_IMPLEMENTATION
 #include <Foundation/Foundation.hpp>
 #include <Metal/Metal.hpp>
 #include <QuartzCore/QuartzCore.hpp>
 
+#include <iostream>
 #include <vamp/vector.hh>
 #include <vamp/collision/environment.hh>
 #include <vamp/collision/validity.hh>
+#include "metal_shapes.hh"
 
 // NOLINTBEGIN(*-magic-numbers)
 namespace vamp::robots::sphere
@@ -106,55 +108,136 @@ namespace vamp::robots::sphere
         return not sphere_environment_in_collision(environment, q[0], q[1], q[2], radius);
     }
 
+    inline void start_capture(std::string path, MTL::Device* device) {
+        auto descriptor = MTL::CaptureDescriptor::alloc()->init();
+        descriptor->setCaptureObject(device);
+
+        if (!path.empty()) {
+            auto string = NS::String::string(path.c_str(), NS::UTF8StringEncoding);
+            auto url = NS::URL::fileURLWithPath(string);
+            descriptor->setDestination(MTL::CaptureDestinationGPUTraceDocument);
+            descriptor->setOutputURL(url);
+        }
+
+        auto manager = MTL::CaptureManager::sharedCaptureManager();
+        NS::Error* error;
+        bool started = manager->startCapture(descriptor, &error);
+        descriptor->release();
+        if (!started) {
+            std::ostringstream msg;
+            msg << "[metal::start_capture] Failed to start: "
+                << error->localizedDescription()->utf8String();
+            throw std::runtime_error(msg.str());
+        }
+    }
+
+    inline void stop_capture() {
+        auto manager = MTL::CaptureManager::sharedCaptureManager();
+        manager->stopCapture();
+    }
+
     template <std::size_t rake>
     inline bool interleaved_sphere_fk_metal(
         const vamp::collision::Environment<float> &environment,
         const std::array<std::array<float, 3>, rake> &q) noexcept
     {
         auto num_cfgs = q.size();
+        std::cout << "num_cfgs: " << num_cfgs << std::endl;
+        std::cout << "num spheres: " << environment.spheres.size() << std::endl;
         // set up buffers
-        auto device = MTL::CreateSystemDefaultDevice();
+        MTL::Device* device = MTL::CreateSystemDefaultDevice();
+        assert(device != nullptr);
+        std::cout << "Device created successfully" << std::endl;
+        std::cout << "Device max buffer length: " << device->maxBufferLength() << " bytes" << std::endl;
         auto storage_mode = MTL::ResourceStorageModeShared;
-        MTL::Buffer *env_buf = device->newBuffer(sizeof(vamp::collision::Environment<float>), storage_mode);
+        std::cout << "storage mode: " << storage_mode << std::endl;
+        // MTL::Buffer *env_buf = device->newBuffer(sizeof(vamp::collision::Environment<float>), storage_mode);
+        auto spheres_size = sizeof(metal_shapes::Sphere) * environment.spheres.size();
+        std::cout << "spheres_size: " << spheres_size << std::endl;
+        MTL::Buffer *spheres_buf = device->newBuffer(spheres_size, storage_mode);
+        assert(spheres_buf != nullptr);
+        // std::cout << "sizeof env: " << sizeof(vamp::collision::Environment<float>) << std::endl;
+        std::cout << "spheres_buf: " << spheres_buf->contents() << std::endl;
         MTL::Buffer *cfg_buf = device->newBuffer(sizeof(float) * 3 * num_cfgs, storage_mode);
+        assert(cfg_buf != nullptr);
+        std::cout << "cfg_buf: " << cfg_buf->contents() << std::endl;
         MTL::Buffer *out_buf = device->newBuffer(sizeof(bool) * num_cfgs, storage_mode);
-        MTL::Buffer *rad_buf = device->newBuffer(sizeof(float), storage_mode);
+        std::cout << "out_buf: " << out_buf->contents() << std::endl;
+        MTL::Buffer *args_buf = device->newBuffer(sizeof(CollisionKernelArgs), storage_mode);
+        std::cout << "args_buf: " << args_buf->contents() << std::endl;
 
         // initialize buffers
-        auto env_ptr = static_cast<vamp::collision::Environment<float>*>(env_buf->contents());
+        // auto env_ptr = static_cast<vamp::collision::Environment<float>*>(env_buf->contents());
+        auto spheres_ptr = static_cast<metal_shapes::Sphere*>(spheres_buf->contents());
         auto cfg_ptr = static_cast<float*>(cfg_buf->contents());
         auto out_ptr = static_cast<bool*>(out_buf->contents());
-        auto rad_ptr = static_cast<float*>(rad_buf->contents());
-        *env_ptr = environment;
-        for (auto i = 0U; i < num_cfgs; i) {
-            cfg_buf[i * 3] = q[i][0];
-            cfg_buf[i * 3 + 1] = q[i][1];
-            cfg_buf[i * 3 + 2] = q[i][2];
+        auto args_ptr = static_cast<CollisionKernelArgs*>(args_buf->contents());
+        // std::cout << "environment argument size: " << sizeof(environment) << std::endl;
+        // std::cout << "env_ptr: " << env_ptr << std::endl;
+        // // *env_ptr = environment;
+        // std::cout << "env_ptr: " << env_ptr << std::endl;
+        std::cout << "copying spheres" << std::endl;
+        for (auto i = 0U; i < environment.spheres.size(); i++) {
+            spheres_ptr[i].x = environment.spheres[i].x;
+            spheres_ptr[i].y = environment.spheres[i].y;
+            spheres_ptr[i].z = environment.spheres[i].z;
+            spheres_ptr[i].r = environment.spheres[i].r;
         }
-        *rad_ptr = radius;
+        std::cout << "done copying spheres" << std::endl;
+        for (auto i = 0U; i < num_cfgs; i++) {
+            // cfg_ptr[i] = 1.0;
+            cfg_ptr[i * 3] = q[i][0];
+            cfg_ptr[i * 3 + 1] = q[i][1];
+            cfg_ptr[i * 3 + 2] = q[i][2];
+            // std::cout << "Config: " << cfg_ptr[i * 3] << " " << cfg_ptr[i * 3 + 1] << " " << cfg_ptr[i * 3 + 2] << std::endl;
+        }
+        for (auto i = 0U; i < num_cfgs; i++) {
+            out_ptr[i] = false;
+        }
+        args_ptr->num_spheres_in_environment = environment.spheres.size();
+        args_ptr->sphere_robot_radius = radius;
         
 
         // initialize pipeline
+        start_capture("/Users/pranavj/Documents/coding/zaklab/vamp/src/impl/vamp/robots/sphere/capture.gputrace", device);
         std::string shader_name = "sphere_collision_check";
-        MTL::Library *default_library = device->newDefaultLibrary();
+        std::string library_path = "/Users/pranavj/Documents/coding/zaklab/vamp/build/CollisionChecking.metallib";
+        auto library_path_str = NS::String::string(library_path.c_str(), NS::ASCIIStringEncoding);
+        NS::Error *lib_error;
+        MTL::Library *default_library = device->newLibrary(library_path_str, &lib_error);
         assert(default_library != nullptr);
-        auto str = NS::String::string(shader_name.c_str(), NS::ASCIIStringEncoding);
-        MTL::Function *sphere_cc_fn = default_library->newFunction(str);
+        auto shader_name_str = NS::String::string(shader_name.c_str(), NS::ASCIIStringEncoding);
+        MTL::Function *sphere_cc_fn = default_library->newFunction(shader_name_str);
+        std::cout << "sphere_cc_fn: " << sphere_cc_fn << std::endl;
         assert(sphere_cc_fn);
-        NS::Error *error;
-        MTL::ComputePipelineState* sphere_cc_pso = device->newComputePipelineState(sphere_cc_fn, &error);
-
+        NS::Error *pso_error;
+        MTL::ComputePipelineState* sphere_cc_pso = device->newComputePipelineState(sphere_cc_fn, &pso_error);
+        std::cout << "sphere_cc_pso: " << sphere_cc_pso << std::endl;
         // initialize command queue, command buffer, and compute encoder
         MTL::CommandQueue *command_queue = device->newCommandQueue();
+
+        // capture gpu trace
+        // MTL::CaptureManager* pCaptureManager = MTL::CaptureManager::sharedCaptureManager();
+        // auto success = pCaptureManager->supportsDestination(MTL::CaptureDestinationGPUTraceDocument);
+        // assert(success);
+        // MTL::CaptureDescriptor* pCaptureDescriptor = MTL::CaptureDescriptor::alloc()->init();
+        // pCaptureDescriptor->setDestination(MTL::CaptureDestinationGPUTraceDocument);
+        // std::string trace_path = "/Users/pranavj/Documents/coding/zaklab/vamp/src/impl/vamp/robots/sphere/capture.gputrace";
+        // pCaptureDescriptor->setOutputURL(NS::URL::fileURLWithPath(NS::String::string(trace_path.c_str(), NS::ASCIIStringEncoding)));
+        // pCaptureDescriptor->setCaptureObject(device);
+        // NS::Error *cap_error;
+        // success = pCaptureManager->startCapture(pCaptureDescriptor, &cap_error);
+        // assert(success);
+
         MTL::CommandBuffer *command_buffer = command_queue->commandBuffer();
         assert(command_buffer != nullptr);
         MTL::ComputeCommandEncoder *compute_encoder = command_buffer->computeCommandEncoder();
         assert(compute_encoder != nullptr);
 
         compute_encoder->setComputePipelineState(sphere_cc_pso);
-        compute_encoder->setBuffer(env_buf, 0, 0);
+        compute_encoder->setBuffer(spheres_buf, 0, 0);
         compute_encoder->setBuffer(cfg_buf, 0, 1);
-        compute_encoder->setBuffer(rad_buf, 0, 2);
+        compute_encoder->setBuffer(args_buf, 0, 2);
         compute_encoder->setBuffer(out_buf, 0, 3);
 
         // initialize grid
@@ -169,14 +252,28 @@ namespace vamp::robots::sphere
         // dispatch threads
         compute_encoder->dispatchThreadgroups(grid_size, thread_group_size);
         compute_encoder->endEncoding();
+
+        
+        // commit and wait
         command_buffer->commit();
         command_buffer->waitUntilCompleted();
+
+        // pCaptureManager->stopCapture();
+        stop_capture();
 
         for (auto i = 0U; i < num_cfgs; i++) {
             if (out_ptr[i]) {
                 return false;
             }
         }
+
+        // static_cast<vamp::collision::Environment<float>*>(env_buf->contents())->~Environment();
+        // env_buf->release();
+        spheres_buf->release();
+        cfg_buf->release();
+        out_buf->release();
+        args_buf->release();
+        device->release();
         return true;
     }
 
