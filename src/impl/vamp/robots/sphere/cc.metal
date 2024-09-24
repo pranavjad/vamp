@@ -1,25 +1,25 @@
 #include <metal_stdlib>
-#include "metal_shapes.hh"
+#include <vamp/metal/metal_types.hh>
 
 using namespace metal;
 
-float sphere_sphere_sql2(
-    const constant metal_shapes::Sphere &s1,
-    float x,
-    float y,
-    float z,
-    float r)
-{
-    const float dx = s1.x - x;
-    const float dy = s1.y - y;
-    const float dz = s1.z - z;
-    return (dx * dx + dy * dy + dz * dz) - (s1.r + r) * (s1.r + r);
-}
+// inline float sphere_sphere_sql2(
+//     const constant metal_types::Sphere &s1,
+//     float x,
+//     float y,
+//     float z,
+//     float r)
+// {
+//     const float dx = s1.x - x;
+//     const float dy = s1.y - y;
+//     const float dz = s1.z - z;
+//     return (dx * dx + dy * dy + dz * dz) - (s1.r + r) * (s1.r + r);
+// }
 
 kernel void sphere_collision_check(
-    constant metal_shapes::Sphere* spheres [[buffer(0)]],
+    constant metal_types::Sphere* spheres [[buffer(0)]],
     constant float* configurations [[buffer(1)]],
-    constant CollisionKernelArgs* args [[buffer(2)]],
+    constant SphereCollisionKernelArgs* args [[buffer(2)]],
     device bool* out [[buffer(3)]],
     uint id [[thread_position_in_grid]])
 {
@@ -36,7 +36,7 @@ kernel void sphere_collision_check(
     bool collision_found = false;
     for (uint i = 0; i < num_spheres; ++i)
     {
-        const constant metal_shapes::Sphere& es = spheres[i];
+        const constant metal_types::Sphere& es = spheres[i];
         const float min_distance = sqrt(es.x * es.x + es.y * es.y + es.z * es.z) - es.r;
         const float diff = min_distance - max_extent;
         if (diff > 0)

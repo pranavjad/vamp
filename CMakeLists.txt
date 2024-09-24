@@ -1,43 +1,3 @@
-# cmake_minimum_required(VERSION 3.12.0)
-# project(minimal-test VERSION 0.1.0)
-
-# set(CMAKE_CXX_STANDARD 17)
-
-
-# add_compile_options(-Wall -Wextra)
-# add_executable(main scripts/cpp/device_test.cpp)
-
-# add_library(Metal INTERFACE)
-
-# find_library(APPLE_FWK_FOUNDATION Foundation REQUIRED)
-# find_library(APPLE_FWK_QUARTZ_CORE QuartzCore REQUIRED)
-# find_library(APPLE_FWK_METAL Metal REQUIRED)
-# find_library(APPLE_FWK_METAL_KIT MetalKit REQUIRED)
-# find_library(APPLE_FWK_APP_KIT AppKit REQUIRED)
-
-# target_include_directories(Metal INTERFACE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/metal-cpp
-# )
-
-# target_compile_definitions(Metal INTERFACE
-#     NS_PRIVATE_IMPLEMENTATION
-#     CA_PRIVATE_IMPLEMENTATION
-#     MTL_PRIVATE_IMPLEMENTATION
-#     MTK_PRIVATE_IMPLEMENTATION
-# )
-
-# target_link_libraries(Metal INTERFACE
-#     ${APPLE_FWK_FOUNDATION}
-#     ${APPLE_FWK_QUARTZ_CORE}
-#     ${APPLE_FWK_METAL}
-#     ${APPLE_FWK_METAL_KIT}
-#     ${APPLE_FWK_APP_KIT}
-# )
-
-# target_link_libraries(main PUBLIC Metal)
-
-
-
 cmake_minimum_required(VERSION 3.16...3.22)
 
 option(VAMP_LTO "Use LTO." ON)
@@ -105,12 +65,12 @@ target_include_directories(Metal INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/metal-cpp
 )
 
-target_compile_definitions(Metal INTERFACE
-    NS_PRIVATE_IMPLEMENTATION
-    CA_PRIVATE_IMPLEMENTATION
-    MTL_PRIVATE_IMPLEMENTATION
-    MTK_PRIVATE_IMPLEMENTATION
-)
+# target_compile_definitions(Metal INTERFACE
+#     NS_PRIVATE_IMPLEMENTATION
+#     CA_PRIVATE_IMPLEMENTATION
+#     MTL_PRIVATE_IMPLEMENTATION
+#     MTK_PRIVATE_IMPLEMENTATION
+# )
 
 target_link_libraries(Metal INTERFACE
     ${APPLE_FWK_FOUNDATION}
@@ -163,7 +123,7 @@ target_link_libraries(_core_ext
     Eigen3::Eigen
 )
 target_link_libraries(_core_ext
-    PUBLIC
+    PRIVATE
     Metal
 )
 
@@ -225,13 +185,16 @@ if(VAMP_BUILD_OMPL_DEMO)
 endif()
 
 if(VAMP_BUILD_GPU_DEMO)
-  set(METAL_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/impl/vamp/robots/sphere/cc.metal)
+  if (NOT ROBOT)
+    set(ROBOT "sphere")
+  endif()
+  set(METAL_SHADER_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/impl/vamp/robots/${ROBOT}/*.metal)
   set(METAL_IR_FILE ${CMAKE_CURRENT_BINARY_DIR}/cc.ir)
   set(METAL_LIB_FILE ${CMAKE_CURRENT_BINARY_DIR}/CollisionChecking.metallib)
 
   add_custom_command(
     OUTPUT ${METAL_IR_FILE}
-    COMMAND xcrun -sdk macosx metal -I. -o ${METAL_IR_FILE} -c ${METAL_SHADER_SOURCE}
+    COMMAND xcrun -sdk macosx metal -I. -I/${CMAKE_CURRENT_SOURCE_DIR}/src/impl/ -o ${METAL_IR_FILE} -c ${METAL_SHADER_SOURCE}
     DEPENDS ${METAL_SHADER_SOURCE}
     COMMENT "Compiling Metal shader to IR"
   )
@@ -249,8 +212,14 @@ if(VAMP_BUILD_GPU_DEMO)
   )
 
   add_executable(vamp_gpu_demo scripts/cpp/batched_cc.cpp)
+
+  target_compile_definitions(vamp_gpu_demo
+    PRIVATE
+    _GLIBCXX_USE_NANOSLEEP
+  )
+
   target_link_libraries(vamp_gpu_demo 
-    PUBLIC 
+    PRIVATE 
     Metal
     Eigen3::Eigen
   )

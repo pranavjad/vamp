@@ -11,7 +11,7 @@
 #include <vamp/vector.hh>
 #include <vamp/collision/environment.hh>
 #include <vamp/collision/validity.hh>
-#include "metal_shapes.hh"
+#include <vamp/metal/metal_types.hh>
 
 // NOLINTBEGIN(*-magic-numbers)
 namespace vamp::robots::sphere
@@ -141,6 +141,7 @@ namespace vamp::robots::sphere
         const vamp::collision::Environment<float> &environment,
         const std::array<std::array<float, 3>, rake> &q) noexcept
     {
+        // return true;
         auto num_cfgs = q.size();
         std::cout << "num_cfgs: " << num_cfgs << std::endl;
         std::cout << "num spheres: " << environment.spheres.size() << std::endl;
@@ -152,7 +153,7 @@ namespace vamp::robots::sphere
         auto storage_mode = MTL::ResourceStorageModeShared;
         std::cout << "storage mode: " << storage_mode << std::endl;
         // MTL::Buffer *env_buf = device->newBuffer(sizeof(vamp::collision::Environment<float>), storage_mode);
-        auto spheres_size = sizeof(metal_shapes::Sphere) * environment.spheres.size();
+        auto spheres_size = sizeof(metal_types::Sphere) * environment.spheres.size();
         std::cout << "spheres_size: " << spheres_size << std::endl;
         MTL::Buffer *spheres_buf = device->newBuffer(spheres_size, storage_mode);
         assert(spheres_buf != nullptr);
@@ -163,15 +164,15 @@ namespace vamp::robots::sphere
         std::cout << "cfg_buf: " << cfg_buf->contents() << std::endl;
         MTL::Buffer *out_buf = device->newBuffer(sizeof(bool) * num_cfgs, storage_mode);
         std::cout << "out_buf: " << out_buf->contents() << std::endl;
-        MTL::Buffer *args_buf = device->newBuffer(sizeof(CollisionKernelArgs), storage_mode);
+        MTL::Buffer *args_buf = device->newBuffer(sizeof(SphereCollisionKernelArgs), storage_mode);
         std::cout << "args_buf: " << args_buf->contents() << std::endl;
 
         // initialize buffers
         // auto env_ptr = static_cast<vamp::collision::Environment<float>*>(env_buf->contents());
-        auto spheres_ptr = static_cast<metal_shapes::Sphere*>(spheres_buf->contents());
+        auto spheres_ptr = static_cast<metal_types::Sphere*>(spheres_buf->contents());
         auto cfg_ptr = static_cast<float*>(cfg_buf->contents());
         auto out_ptr = static_cast<bool*>(out_buf->contents());
-        auto args_ptr = static_cast<CollisionKernelArgs*>(args_buf->contents());
+        auto args_ptr = static_cast<SphereCollisionKernelArgs*>(args_buf->contents());
         // std::cout << "environment argument size: " << sizeof(environment) << std::endl;
         // std::cout << "env_ptr: " << env_ptr << std::endl;
         // // *env_ptr = environment;
@@ -199,7 +200,7 @@ namespace vamp::robots::sphere
         
 
         // initialize pipeline
-        start_capture("/Users/pranavj/Documents/coding/zaklab/vamp/src/impl/vamp/robots/sphere/capture.gputrace", device);
+        // start_capture("/Users/pranavj/Documents/coding/zaklab/vamp/src/impl/vamp/robots/sphere/capture.gputrace", device);
         std::string shader_name = "sphere_collision_check";
         std::string library_path = "/Users/pranavj/Documents/coding/zaklab/vamp/build/CollisionChecking.metallib";
         auto library_path_str = NS::String::string(library_path.c_str(), NS::ASCIIStringEncoding);
@@ -258,8 +259,7 @@ namespace vamp::robots::sphere
         command_buffer->commit();
         command_buffer->waitUntilCompleted();
 
-        // pCaptureManager->stopCapture();
-        stop_capture();
+        // stop_capture();
 
         for (auto i = 0U; i < num_cfgs; i++) {
             if (out_ptr[i]) {

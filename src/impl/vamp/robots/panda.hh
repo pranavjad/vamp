@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vamp/robots/panda/fk.hh>
+#include <vamp/robots/panda/fk_gpu.hh>
 #include <vamp/vector.hh>
 
 namespace vamp::robots
@@ -38,6 +39,9 @@ namespace vamp::robots
 
         template <std::size_t rake>
         static constexpr auto fkcc = panda::interleaved_sphere_fk<rake>;
+
+        template <std::size_t rake>
+        static constexpr auto fkcc_gpu = panda::interleaved_sphere_fk_gpu<rake>;
 
         template <std::size_t rake>
         static constexpr auto fkcc_attach = panda::interleaved_sphere_fk_attachment<rake>;
