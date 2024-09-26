@@ -1,8 +1,40 @@
 #include <metal_stdlib>
+// Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/metal/macos/lib/clang/32023.155/include/metal
+
 #include <vamp/metal/metal_types.hh>
 
 using namespace metal;
 using namespace metal_types;
+
+// inline constexpr float custom_sin(float x) {
+//     // Square of the input
+//     float v_sq = x * abs(x);
+    
+//     // Initial polynomial terms
+//     float s_vsq = -0.478637850138f * v_sq;
+//     float s_v = 1.503684069359f * x;
+//     float p = s_vsq + s_v;
+    
+//     // Calculate absolute value and higher powers of p
+//     float abs_p = abs(p);
+//     float p_2 = p * abs_p;
+//     float p_3 = p_2 * abs_p;
+    
+//     // Final polynomial terms
+//     float d_3 = 0.011596870476f * p_3;
+//     float d_2 = 0.140024078368f * p_2;
+//     float d_1 = 0.665200679751f * p;
+    
+//     // Sum up the polynomial terms for the final approximation
+//     return d_3 + d_2 + d_1;
+// }
+
+// inline constexpr float custom_cos(float x) {
+//     constexpr float PI = 3.14159265359f;
+//     float v_sq = x + (PI / 2.0f);
+//     float vsq_sq = v_sq - ((v_sq >= PI) ? (2.0f * PI) : 0.0f);
+//     return custom_sin(vsq_sq);
+// }
 
 inline bool sphere_environment_in_collision(
     const constant metal_types::Sphere *spheres,
@@ -16,7 +48,7 @@ inline bool sphere_environment_in_collision(
     for (uint i = 0; i < args->num_spheres_in_environment; i++)
     {
         const float diff = spheres[i].min_distance - max_extent;
-        if (diff > 0)
+        if (spheres[i].min_distance > max_extent)
         {
             break;
         }

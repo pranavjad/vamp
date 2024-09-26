@@ -10,6 +10,7 @@ option(VAMP_OMPL_PATH "Search Path for OMPL Installation - Only Needed for Demo 
 # option(VAMP_METAL_CPP_PATH "Path to Metal C++ headers" "")
 option(VAMP_BUILD_GPU_DEMO "Build VAMP C++ Batched Collision Checking on GPU Script" ON)
 set(VAMP_METAL_CPP_PATH "/Users/pranavj/Documents/coding/zaklab/vamp/metal-cpp")
+set(METAL_STDLIB_PATH "Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/metal/macos/lib/clang/32023.155/include/metal")
 set(CMAKE_FRAMEWORK_PATH /System/Library/Frameworks /Library/Frameworks)
 set(MTL_CAPTURE_ENABLED 1)
 
@@ -115,6 +116,7 @@ nanobind_add_module(_core_ext
 target_include_directories(_core_ext
     SYSTEM PRIVATE
     ${VAMP_EXT_INCLUDES}
+    # ${METAL_STDLIB_PATH}
     # ${VAMP_METAL_CPP_PATH}
 )
 
@@ -227,6 +229,7 @@ if(VAMP_BUILD_GPU_DEMO)
     SYSTEM PRIVATE 
     ${VAMP_EXT_INCLUDES}
     ${CMAKE_CURRENT_SOURCE_DIR}/metal-cpp
+    # ${METAL_STDLIB_PATH}
   )
 
   add_dependencies(vamp_gpu_demo metal_shaders)

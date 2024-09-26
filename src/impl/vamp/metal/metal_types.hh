@@ -20,7 +20,7 @@ namespace metal_types
     //     // explicit Shape(const Shape &other) : min_distance(other.min_distance) {}
     // };
 
-    struct Sphere //: public Shape
+    struct Sphere
     {
         float x;
         float y;
@@ -28,21 +28,9 @@ namespace metal_types
         float r;
         float min_distance;
 
-        // Sphere() = default;
+        Sphere() = default;
 
-        // explicit Sphere(float x, float y, float z, float r) : Shape(), x(x), y(y), z(z), r(r)
-        // {
-        //     min_distance = sqrt(x * x + y * y + z * z) - r;
-        // }
-
-        // explicit Sphere(const Sphere &other)
-        //   : Shape(other)
-        //   , x(other.x)
-        //   , y(other.y)
-        //   , z(other.z)
-        //   , r(other.r)
-        // {
-        // }
+        constexpr explicit Sphere(float x_, float y_, float z_, float r_) : x(x_), y(y_), z(z_), r(r_) {}
     };
 
     // struct Environment
@@ -108,6 +96,6 @@ namespace metal_types
         float bz_,
         float br_) -> bool
     {
-        return not (sphere_sphere_sql2(ax_, ay_, az_, ar_, bx_, by_, bz_, br_) == 0);
+        return sphere_sphere_sql2(ax_, ay_, az_, ar_, bx_, by_, bz_, br_) < 0;
     }
 }  // namespace metal_types

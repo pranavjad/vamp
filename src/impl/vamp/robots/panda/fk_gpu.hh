@@ -35,10 +35,20 @@ namespace vamp::robots::panda
         auto out_ptr = static_cast<bool*>(out_buf->contents());
         auto args_ptr = static_cast<CollisionKernelArgs*>(args_buf->contents());
         for (auto i = 0U; i < environment.spheres.size(); i++) {
-            spheres_ptr[i].x = environment.spheres[i].x;
-            spheres_ptr[i].y = environment.spheres[i].y;
-            spheres_ptr[i].z = environment.spheres[i].z;
-            spheres_ptr[i].r = environment.spheres[i].r;
+            // new (&spheres_ptr[i]) metal_types::Sphere(environment.spheres[i].x, environment.spheres[i].y, environment.spheres[i].z, environment.spheres[i].r);
+            metal_types::Sphere sphere(environment.spheres[i].x, environment.spheres[i].y, environment.spheres[i].z, environment.spheres[i].r);
+            sphere.min_distance = std::sqrt(metal_types::dot3(sphere.x, sphere.y, sphere.z, sphere.x, sphere.y, sphere.z)) - sphere.r;
+            // spheres_ptr[i].x = environment.spheres[i].x;
+            // spheres_ptr[i].y = environment.spheres[i].y;
+            // spheres_ptr[i].z = environment.spheres[i].z;
+            // spheres_ptr[i].r = environment.spheres[i].r;
+
+            spheres_ptr[i].x = sphere.x;
+            spheres_ptr[i].y = sphere.y;
+            spheres_ptr[i].z = sphere.z;
+            spheres_ptr[i].r = sphere.r;
+            spheres_ptr[i].min_distance = sphere.min_distance;
+            // std::cout  << "min_distance: " << spheres_ptr[i].min_distance << std::endl;
         }
         for (auto i = 0U; i < num_cfgs; i++) {
             cfg_ptr[i * 7] = q[i][0];
