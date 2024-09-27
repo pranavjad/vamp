@@ -8,6 +8,9 @@
 #include <vamp/collision/environment.hh>
 #include <vamp/collision/validity.hh>
 #include <vamp/metal/metal_types.hh>
+#include <vamp/utils.hh>
+#include <iostream>
+#include <iomanip>
 
 // NOLINTBEGIN(*-magic-numbers)
 namespace vamp::robots::panda
@@ -17,6 +20,7 @@ namespace vamp::robots::panda
         const vamp::collision::Environment<float> &environment,
         const std::array<std::array<float, 7>, rake> &q) noexcept -> std::vector<bool>
     {
+        auto start_time = std::chrono::steady_clock::now();
         auto num_cfgs = q.size();
 
         MTL::Device* device = MTL::CreateSystemDefaultDevice();
@@ -38,11 +42,6 @@ namespace vamp::robots::panda
             // new (&spheres_ptr[i]) metal_types::Sphere(environment.spheres[i].x, environment.spheres[i].y, environment.spheres[i].z, environment.spheres[i].r);
             metal_types::Sphere sphere(environment.spheres[i].x, environment.spheres[i].y, environment.spheres[i].z, environment.spheres[i].r);
             sphere.min_distance = std::sqrt(metal_types::dot3(sphere.x, sphere.y, sphere.z, sphere.x, sphere.y, sphere.z)) - sphere.r;
-            // spheres_ptr[i].x = environment.spheres[i].x;
-            // spheres_ptr[i].y = environment.spheres[i].y;
-            // spheres_ptr[i].z = environment.spheres[i].z;
-            // spheres_ptr[i].r = environment.spheres[i].r;
-
             spheres_ptr[i].x = sphere.x;
             spheres_ptr[i].y = sphere.y;
             spheres_ptr[i].z = sphere.z;
@@ -96,10 +95,14 @@ namespace vamp::robots::panda
         }
         MTL::Size thread_group_size = MTL::Size::Make(thread_group_sz, 1, 1);
 
+        std::cout << "Kernel setup time: " << std::right << std::setw(8) << vamp::utils::get_elapsed_nanoseconds(start_time) << " ns" << std::endl;
+
+        start_time = std::chrono::steady_clock::now();
         command_encoder->dispatchThreadgroups(grid_size, thread_group_size);
         command_encoder->endEncoding();
         command_buffer->commit();
         command_buffer->waitUntilCompleted();
+        std::cout << "Kernel exec time: " << std::right << std::setw(8) << vamp::utils::get_elapsed_nanoseconds(start_time) << " ns" << std::endl;
 
         std::vector<bool> result(num_cfgs);
         for (auto i = 0U; i < num_cfgs; i++) {
