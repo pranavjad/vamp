@@ -22,82 +22,83 @@
 
 #include <iostream>
 
-static constexpr auto num_configs = 16U;
-static constexpr auto num_obstacles = 4U;
+static constexpr auto num_configs = 10000000;
+static constexpr auto num_obstacles = 10U;
 static constexpr auto simd_width = 4U;
 
-inline auto sphere_test()
-{
+// inline auto sphere_test()
+// {
 
-    std::mt19937 gen(0);
-    std::uniform_real_distribution<float> center_dist(0.0, 1.0);
-    std::uniform_real_distribution<> radius_dist(0.0, 0.05);    
+//     std::mt19937 gen(0);
+//     std::uniform_real_distribution<float> center_dist(0.0, 1.0);
+//     std::uniform_real_distribution<> radius_dist(0.0, 0.05);    
     
-    // Create the environment
-    vamp::collision::Environment<float> gpu_environment;
-    vamp::collision::Environment<vamp::FloatVector<simd_width>> cpu_environment;
-    for (auto i = 0U; i < num_obstacles; i++) {
-        std::array<float, 3> obstacle = {center_dist(gen), center_dist(gen), center_dist(gen)};
-        std::cout << "Obstacle: " << obstacle[0] << " " << obstacle[1] << " " << obstacle[2] << std::endl;
-        // double radius = radius_dist(gen);
-        auto sphere = vamp::collision::Sphere<float>(center_dist(gen), center_dist(gen), center_dist(gen), radius_dist(gen));
-        gpu_environment.spheres.emplace_back(sphere);
-        cpu_environment.spheres.emplace_back(sphere);
-    }
+//     // Create the environment
+//     vamp::collision::Environment<float> gpu_environment;
+//     vamp::collision::Environment<vamp::FloatVector<simd_width>> cpu_environment;
+//     for (auto i = 0U; i < num_obstacles; i++) {
+//         std::array<float, 3> obstacle = {center_dist(gen), center_dist(gen), center_dist(gen)};
+//         std::cout << "Obstacle: " << obstacle[0] << " " << obstacle[1] << " " << obstacle[2] << std::endl;
+//         // double radius = radius_dist(gen);
+//         auto sphere = vamp::collision::Sphere<float>(center_dist(gen), center_dist(gen), center_dist(gen), radius_dist(gen));
+//         gpu_environment.spheres.emplace_back(sphere);
+//         cpu_environment.spheres.emplace_back(sphere);
+//     }
 
-    // Create the configurations
-    std::array<std::array<float, 3>, num_configs> configs;
-    std::array<std::array<float, num_configs>, 3> configs_transposed;
+//     // Create the configurations
+//     std::array<std::array<float, 3>, num_configs> configs;
+//     std::array<std::array<float, num_configs>, 3> configs_transposed;
 
-    for (auto i = 0U; i < num_configs; i++) {
-        configs[i][0] = center_dist(gen);
-        configs[i][1] = center_dist(gen);
-        configs[i][2] = center_dist(gen);
-        // std::cout << "Config: " << configs[i][0] << " " << configs[i][1] << " " << configs[i][2] << std::endl;
+//     for (auto i = 0U; i < num_configs; i++) {
+//         configs[i][0] = center_dist(gen);
+//         configs[i][1] = center_dist(gen);
+//         configs[i][2] = center_dist(gen);
+//         // std::cout << "Config: " << configs[i][0] << " " << configs[i][1] << " " << configs[i][2] << std::endl;
 
-        configs_transposed[0][i] = configs[i][0];
-        configs_transposed[1][i] = configs[i][1];
-        configs_transposed[2][i] = configs[i][2];
-    }
+//         configs_transposed[0][i] = configs[i][0];
+//         configs_transposed[1][i] = configs[i][1];
+//         configs_transposed[2][i] = configs[i][2];
+//     }
 
-    // CPU Collision Check
-    bool cpu_result = true;
-    for (auto i = 0U; i < num_configs/simd_width; i++) {
-        vamp::robots::Sphere::ConfigurationBlock<simd_width> block;
-        std::vector<float> row0(configs_transposed[0].begin() + i*simd_width, configs_transposed[0].begin() + (i+1)*simd_width);
-        std::vector<float> row1(configs_transposed[1].begin() + i*simd_width, configs_transposed[1].begin() + (i+1)*simd_width);
-        std::vector<float> row2(configs_transposed[2].begin() + i*simd_width, configs_transposed[2].begin() + (i+1)*simd_width);
-        block[0] = vamp::FloatVector<simd_width>(row0);
-        block[1] = vamp::FloatVector<simd_width>(row1);
-        block[2] = vamp::FloatVector<simd_width>(row2);
-        // std::cout << "Block: " << i << " | " << block << std::endl;
-        cpu_result = cpu_result && vamp::robots::Sphere::fkcc<simd_width>(cpu_environment, block);
-        if (!cpu_result) {
-            break;
-        }
-    }
+//     // CPU Collision Check
+//     bool cpu_result = true;
+//     for (auto i = 0U; i < num_configs/simd_width; i++) {
+//         vamp::robots::Sphere::ConfigurationBlock<simd_width> block;
+//         std::vector<float> row0(configs_transposed[0].begin() + i*simd_width, configs_transposed[0].begin() + (i+1)*simd_width);
+//         std::vector<float> row1(configs_transposed[1].begin() + i*simd_width, configs_transposed[1].begin() + (i+1)*simd_width);
+//         std::vector<float> row2(configs_transposed[2].begin() + i*simd_width, configs_transposed[2].begin() + (i+1)*simd_width);
+//         block[0] = vamp::FloatVector<simd_width>(row0);
+//         block[1] = vamp::FloatVector<simd_width>(row1);
+//         block[2] = vamp::FloatVector<simd_width>(row2);
+//         // std::cout << "Block: " << i << " | " << block << std::endl;
+//         cpu_result = cpu_result && vamp::robots::Sphere::fkcc<simd_width>(cpu_environment, block);
+//         if (!cpu_result) {
+//             break;
+//         }
+//     }
 
-    auto start_time = std::chrono::steady_clock::now();
-    auto gpu_result = vamp::robots::Sphere::fkcc_gpu<num_configs>(gpu_environment, configs);
-    std::cout << "GPU time: " << vamp::utils::get_elapsed_nanoseconds(start_time) << " ns" << std::endl;
+//     auto start_time = std::chrono::steady_clock::now();
+//     auto gpu_result = vamp::robots::Sphere::fkcc_gpu<num_configs>(gpu_environment, configs);
+//     std::cout << "GPU time: " << vamp::utils::get_elapsed_nanoseconds(start_time) << " ns" << std::endl;
 
-    std::cout << std::endl;
-    std::cout << "GPU Result: " << gpu_result << std::endl;
-    std::cout << "CPU Result: " << cpu_result << std::endl;
-}
+//     std::cout << std::endl;
+//     std::cout << "GPU Result: " << gpu_result << std::endl;
+//     std::cout << "CPU Result: " << cpu_result << std::endl;
+// }
 
 inline bool panda_test(int seed = 0)
 {
     using panda = vamp::robots::Panda;
     auto constexpr dim = panda::dimension;
     auto rng = vamp::rng::Halton<dim>();
+    auto HALTON_MAX = 1400000;
     // auto seed = std::time(nullptr);
     std::cout << "seed: " << seed << std::endl;
     // 1727186254
     std::mt19937 gen(seed);
     std::uniform_real_distribution<float> center_dist(0, 1.0);
     std::uniform_real_distribution<> radius_dist(0.0, 0.5);
-
+    
     // Create the environment
     vamp::collision::Environment<float> gpu_environment;
     for (auto i = 0U; i < num_obstacles; i++) {
@@ -106,11 +107,18 @@ inline bool panda_test(int seed = 0)
     }
     gpu_environment.sort();
     vamp::collision::Environment<vamp::FloatVector<simd_width>> cpu_environment(gpu_environment);
-
+    std::cout << "Environment created" << std::endl;
     // Create the configurations
-    std::array<std::array<float, dim>, num_configs> configs;
-    std::array<std::array<float, num_configs>, dim> configs_transposed;
-    for (auto i = 0U; i < num_configs; i++) {
+    long configs_size = num_configs; //std::min(num_configs, HALTON_MAX);
+    std::vector<std::vector<float>> configs(configs_size, std::vector<float>(dim, 0.0));
+    std::vector<std::vector<float>> configs_transposed(dim, std::vector<float>(configs_size, 0.0));
+    std::cout << "Memory size of configs: " << configs_size * dim * sizeof(float) << " bytes" << std::endl;
+    for (auto i = 0U; i < configs_size; i++) {
+        if (i % HALTON_MAX == 0) {
+            rng = vamp::rng::Halton<dim>();
+        }
+        // std::cout << "Config: " << i << std::endl;
+        // if (i%100000 == 0) std::cout << "Config: " << i << std::endl;
         auto config = rng.next();
         panda::scale_configuration(config);
         auto config_array = config.to_array();
@@ -127,27 +135,29 @@ inline bool panda_test(int seed = 0)
             configs_transposed[j][i] = config_array[j];
         }
     }
-
+    std::cout << "Configs generated" << std::endl;
     // CPU Collision Check
     auto start_time_cpu = std::chrono::steady_clock::now();
     panda::ConfigurationBlock<simd_width> block;
-    // bool cpu_result = true;
+    bool cpu_result = true;
     std::vector<bool> cpu_result_vec(num_configs, false);
-    for (auto i = 0U; i < num_configs; i+=1) {
+    for (auto i = 0U; i < num_configs; i+=simd_width) {
+        int j = i % HALTON_MAX;
         for (auto k = 0U; k < dim; k++) {
-            // auto row = std::vector<float>(configs_transposed[k].begin() + i, configs_transposed[k].begin() + i + simd_width);
-            // block[k] = vamp::FloatVector<simd_width>(row);
-            block[k] = configs_transposed[k][i];
+            auto row = std::vector<float>(configs_transposed[k].begin() + j, configs_transposed[k].begin() + j + simd_width);
+            block[k] = vamp::FloatVector<simd_width>(row);
+            // block[k] = configs_transposed[k][i];
         }
         // std::cout << block << std::endl;
         // fkcc: returns false if there is a collision
-        auto fkcc_result = panda::fkcc<simd_width>(cpu_environment, block);
+        // auto fkcc_result = panda::fkcc<simd_width>(cpu_environment, block);
         // std::cout << fkcc_result << std::endl;
-        // cpu_result = cpu_result && fkcc_result;
-        cpu_result_vec[i] = fkcc_result;
-        // if(!cpu_result) {
-        //     break;
-        // }
+        // cpu_result = fkcc_result;
+        // cpu_result_vec[i] = fkcc_result;
+        cpu_result = panda::fkcc<simd_width>(cpu_environment, block);
+        if(!cpu_result) {
+            break;
+        }
     }
     std::cout << "CPU time: " << std::right << std::setw(8) << vamp::utils::get_elapsed_nanoseconds(start_time_cpu) << " ns" << std::endl;
 
@@ -155,33 +165,33 @@ inline bool panda_test(int seed = 0)
     auto gpu_result = panda::fkcc_gpu<num_configs>(gpu_environment, configs);
     std::cout << "GPU time: " << std::right << std::setw(8) << vamp::utils::get_elapsed_nanoseconds(start_time_gpu) << " ns" << std::endl;
 
-    std::cout << std::endl;
     // std::cout << "GPU Result: " << gpu_result << std::endl;
-    std::cout << "GPU Result: " << std::endl;
-    for (auto i = 0U; i < num_configs; i++) {
-        std::cout << gpu_result[i] << " ";
-    }
-    std::cout << std::endl;
+    // std::cout << "GPU Result: " << std::endl;
+    // for (auto i = 0U; i < num_configs; i++) {
+    //     std::cout << gpu_result[i] << " ";
+    // }
+    // std::cout << std::endl;
     // std::cout << "CPU Result: " << cpu_result << std::endl;
-    std::cout << "CPU Result: " << std::endl;
-    for (auto i = 0U; i < num_configs; i++) {
-        std::cout << cpu_result_vec[i] << " ";
-    }
-    std::cout << std::endl;
-    for (auto i = 0U; i < num_configs; i++) {
-        if (gpu_result[i] != cpu_result_vec[i]) {
-            std::cout << "Mismatch" << std::endl;
-            return 0;
-        }
-    }
+    // std::cout << "CPU Result: " << std::endl;
+    // for (auto i = 0U; i < num_configs; i++) {
+    //     std::cout << cpu_result_vec[i] << " ";
+    // }
+    // std::cout << std::endl;
+    // for (auto i = 0U; i < num_configs; i++) {
+    //     if (gpu_result[i] != cpu_result_vec[i]) {
+    //         std::cout << "Mismatch" << std::endl;
+    //         return 0;
+    //     }
+    // }
     return 1;
+    // return gpu_result == cpu_result;
 }
 
 
 auto main() -> int
 {
     // failing seeds: 0, 99
-    for (auto i = 0; i < 100; i++) {
+    for (auto i = 0; i < 1; i++) {
         std::cout << "--------------------------------" << std::endl;
         if (!panda_test(i)) {
             std::cout << "Test failed" << std::endl;

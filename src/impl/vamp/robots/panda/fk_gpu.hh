@@ -18,7 +18,7 @@ namespace vamp::robots::panda
     template <std::size_t rake>
     inline auto interleaved_sphere_fk_gpu(
         const vamp::collision::Environment<float> &environment,
-        const std::array<std::array<float, 7>, rake> &q) noexcept -> std::vector<bool>
+        const std::vector<std::vector<float>> &q) noexcept -> bool
     {
         auto start_time = std::chrono::steady_clock::now();
         auto num_cfgs = q.size();
@@ -38,30 +38,7 @@ namespace vamp::robots::panda
         auto cfg_ptr = static_cast<float*>(cfg_buf->contents());
         auto out_ptr = static_cast<bool*>(out_buf->contents());
         auto args_ptr = static_cast<CollisionKernelArgs*>(args_buf->contents());
-        for (auto i = 0U; i < environment.spheres.size(); i++) {
-            // new (&spheres_ptr[i]) metal_types::Sphere(environment.spheres[i].x, environment.spheres[i].y, environment.spheres[i].z, environment.spheres[i].r);
-            metal_types::Sphere sphere(environment.spheres[i].x, environment.spheres[i].y, environment.spheres[i].z, environment.spheres[i].r);
-            sphere.min_distance = std::sqrt(metal_types::dot3(sphere.x, sphere.y, sphere.z, sphere.x, sphere.y, sphere.z)) - sphere.r;
-            spheres_ptr[i].x = sphere.x;
-            spheres_ptr[i].y = sphere.y;
-            spheres_ptr[i].z = sphere.z;
-            spheres_ptr[i].r = sphere.r;
-            spheres_ptr[i].min_distance = sphere.min_distance;
-            // std::cout  << "min_distance: " << spheres_ptr[i].min_distance << std::endl;
-        }
-        for (auto i = 0U; i < num_cfgs; i++) {
-            cfg_ptr[i * 7] = q[i][0];
-            cfg_ptr[i * 7 + 1] = q[i][1];
-            cfg_ptr[i * 7 + 2] = q[i][2];
-            cfg_ptr[i * 7 + 3] = q[i][3];
-            cfg_ptr[i * 7 + 4] = q[i][4];
-            cfg_ptr[i * 7 + 5] = q[i][5];
-            cfg_ptr[i * 7 + 6] = q[i][6];
-        }
-        for (auto i = 0U; i < num_cfgs; i++) {
-            out_ptr[i] = false;
-        }
-        args_ptr->num_spheres_in_environment = environment.spheres.size();
+        
         std::string shader_name = "panda_cc";
         std::string library_path = "/Users/pranavj/Documents/coding/zaklab/vamp/build/CollisionChecking.metallib";
         auto library_path_str = NS::String::string(library_path.c_str(), NS::ASCIIStringEncoding);
@@ -96,31 +73,57 @@ namespace vamp::robots::panda
         MTL::Size thread_group_size = MTL::Size::Make(thread_group_sz, 1, 1);
 
         std::cout << "Kernel setup time: " << std::right << std::setw(8) << vamp::utils::get_elapsed_nanoseconds(start_time) << " ns" << std::endl;
-
+        
         start_time = std::chrono::steady_clock::now();
-        command_encoder->dispatchThreadgroups(grid_size, thread_group_size);
+        // copy data into GPU buffers
+        for (auto i = 0U; i < environment.spheres.size(); i++) {
+            // new (&spheres_ptr[i]) metal_types::Sphere(environment.spheres[i].x, environment.spheres[i].y, environment.spheres[i].z, environment.spheres[i].r);
+            metal_types::Sphere sphere(environment.spheres[i].x, environment.spheres[i].y, environment.spheres[i].z, environment.spheres[i].r);
+            sphere.min_distance = std::sqrt(metal_types::dot3(sphere.x, sphere.y, sphere.z, sphere.x, sphere.y, sphere.z)) - sphere.r;
+            spheres_ptr[i].x = sphere.x;
+            spheres_ptr[i].y = sphere.y;
+            spheres_ptr[i].z = sphere.z;
+            spheres_ptr[i].r = sphere.r;
+            spheres_ptr[i].min_distance = sphere.min_distance;
+            // std::cout  << "min_distance: " << spheres_ptr[i].min_distance << std::endl;
+        }
+        for (auto i = 0U; i < num_cfgs; i++) {
+            cfg_ptr[i * 7] = q[i][0];
+            cfg_ptr[i * 7 + 1] = q[i][1];
+            cfg_ptr[i * 7 + 2] = q[i][2];
+            cfg_ptr[i * 7 + 3] = q[i][3];
+            cfg_ptr[i * 7 + 4] = q[i][4];
+            cfg_ptr[i * 7 + 5] = q[i][5];
+            cfg_ptr[i * 7 + 6] = q[i][6];
+        }
+        for (auto i = 0U; i < num_cfgs; i++) {
+            out_ptr[i] = false;
+        }
+        args_ptr->num_spheres_in_environment = environment.spheres.size();
+
+        command_encoder->dispatchThreads(grid_size, thread_group_size);
         command_encoder->endEncoding();
         command_buffer->commit();
         command_buffer->waitUntilCompleted();
         std::cout << "Kernel exec time: " << std::right << std::setw(8) << vamp::utils::get_elapsed_nanoseconds(start_time) << " ns" << std::endl;
 
-        std::vector<bool> result(num_cfgs);
-        for (auto i = 0U; i < num_cfgs; i++) {
-            result[i] = out_ptr[i];
-        }
-
+        // std::vector<bool> result(num_cfgs);
         // for (auto i = 0U; i < num_cfgs; i++) {
-        //     if (out_ptr[i]) {
-        //         return true;
-        //     }
+        //     result[i] = out_ptr[i];
         // }
+
+        for (auto i = 0U; i < num_cfgs; i++) {
+            if (!out_ptr[i]) {
+                return false;
+            }
+        }
 
         spheres_buf->release();
         cfg_buf->release();
         out_buf->release();
         args_buf->release();
         device->release();
-        // return false;
-        return result;
+        return true;
+        // return result;
     }
 }  // namespace vamp::robots::panda
