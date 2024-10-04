@@ -23,3 +23,5 @@ src/vamp/_core/*.pyi
 metal-cpp/
 tracy-0.11.1/
 **/*.gputrace
+*.csv
+**/*.ipynb

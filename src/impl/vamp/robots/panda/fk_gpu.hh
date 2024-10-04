@@ -15,7 +15,6 @@
 // NOLINTBEGIN(*-magic-numbers)
 namespace vamp::robots::panda
 {
-    template <std::size_t rake>
     inline auto interleaved_sphere_fk_gpu(
         const vamp::collision::Environment<float> &environment,
         const std::vector<std::vector<float>> &q) noexcept -> bool
@@ -71,8 +70,9 @@ namespace vamp::robots::panda
             thread_group_sz = num_cfgs;
         }
         MTL::Size thread_group_size = MTL::Size::Make(thread_group_sz, 1, 1);
-
-        std::cout << "Kernel setup time: " << std::right << std::setw(8) << vamp::utils::get_elapsed_nanoseconds(start_time) << " ns" << std::endl;
+        auto kernel_setup_time = vamp::utils::get_elapsed_nanoseconds(start_time);
+        std::cout << kernel_setup_time << ",";
+        // std::cout << "Kernel setup time: " << std::right << std::setw(8) << kernel_setup_time << " ns" << std::endl;
         
         start_time = std::chrono::steady_clock::now();
         // copy data into GPU buffers
@@ -105,7 +105,9 @@ namespace vamp::robots::panda
         command_encoder->endEncoding();
         command_buffer->commit();
         command_buffer->waitUntilCompleted();
-        std::cout << "Kernel exec time: " << std::right << std::setw(8) << vamp::utils::get_elapsed_nanoseconds(start_time) << " ns" << std::endl;
+        auto kernel_time = vamp::utils::get_elapsed_nanoseconds(start_time);
+        std::cout << kernel_time << ",";
+        // std::cout << "Kernel exec time: " << std::right << std::setw(8) << kernel_time << " ns" << std::endl;
 
         // std::vector<bool> result(num_cfgs);
         // for (auto i = 0U; i < num_cfgs; i++) {
