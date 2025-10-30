@@ -95,6 +95,7 @@ def configure_robot_and_planner_with_kwargs(robot_name: str, planner_name: str, 
 
     elif planner_name == "rrt_star":
         plan_settings = RRTStarSettings()
+        plan_settings.force_max_iters = kwargs.get("force_max_iters", False)
         if robot_name in ROBOT_RRT_RANGES:
             plan_settings.range = ROBOT_RRT_RANGES[robot_name]
 
