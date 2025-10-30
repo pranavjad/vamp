@@ -18693,34 +18693,34 @@ if (sphere_environment_in_collision(environment,
 //
 
 // link_base
-if (sphere_environment_in_collision(environment,
-                                    y[296],
-                                    y[297],
-                                    y[298],
-                                    y[299]))
-{
+// if (sphere_environment_in_collision(environment,
+//                                     y[296],
+//                                     y[297],
+//                                     y[298],
+//                                     y[299]))
+// {
     
     
-    if (sphere_environment_in_collision(environment,
-                                        y[0],
-                                        y[1],
-                                        y[2],
-                                        y[3]))
-    {
-        return false;
-    }
+//     if (sphere_environment_in_collision(environment,
+//                                         y[0],
+//                                         y[1],
+//                                         y[2],
+//                                         y[3]))
+//     {
+//         return false;
+//     }
     
     
-    if (sphere_environment_in_collision(environment,
-                                        y[4],
-                                        y[5],
-                                        y[6],
-                                        y[7]))
-    {
-        return false;
-    }
+//     if (sphere_environment_in_collision(environment,
+//                                         y[4],
+//                                         y[5],
+//                                         y[6],
+//                                         y[7]))
+//     {
+//         return false;
+//     }
     
-}
+// }
 
 
 
@@ -36495,34 +36495,34 @@ if (sphere_environment_in_collision(environment,
 //
 
 // link_base
-if (sphere_environment_in_collision(environment,
-                                    y[296],
-                                    y[297],
-                                    y[298],
-                                    y[299]))
-{
+// if (sphere_environment_in_collision(environment,
+//                                     y[296],
+//                                     y[297],
+//                                     y[298],
+//                                     y[299]))
+// {
     
     
-    if (sphere_environment_in_collision(environment,
-                                        y[0],
-                                        y[1],
-                                        y[2],
-                                        y[3]))
-    {
-        return false;
-    }
+//     if (sphere_environment_in_collision(environment,
+//                                         y[0],
+//                                         y[1],
+//                                         y[2],
+//                                         y[3]))
+//     {
+//         return false;
+//     }
     
     
-    if (sphere_environment_in_collision(environment,
-                                        y[4],
-                                        y[5],
-                                        y[6],
-                                        y[7]))
-    {
-        return false;
-    }
+//     if (sphere_environment_in_collision(environment,
+//                                         y[4],
+//                                         y[5],
+//                                         y[6],
+//                                         y[7]))
+//     {
+//         return false;
+//     }
     
-}
+// }
 
 
 
