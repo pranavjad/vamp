@@ -6001,13 +6001,13 @@ namespace vamp::robots
             //
 
             // panda_link0
-            if (sphere_environment_in_collision(environment, y[236], y[237], y[238], y[239]))
-            {
-                if (sphere_environment_in_collision(environment, y[0], y[1], y[2], y[3]))
-                {
-                    return false;
-                }
-            }
+            // if (sphere_environment_in_collision(environment, y[236], y[237], y[238], y[239]))
+            // {
+            //     if (sphere_environment_in_collision(environment, y[0], y[1], y[2], y[3]))
+            //     {
+            //         return false;
+            //     }
+            // }
 
             //
             // robot self-collisions
