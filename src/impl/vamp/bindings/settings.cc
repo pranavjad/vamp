@@ -2,6 +2,7 @@
 
 #include <vamp/planning/roadmap.hh>
 #include <vamp/planning/rrtc_settings.hh>
+#include <vamp/planning/rrt_star_settings.hh>
 #include <vamp/planning/aorrtc_settings.hh>
 #include <vamp/planning/simplify_settings.hh>
 
@@ -24,6 +25,18 @@ void vamp::binding::init_settings(nanobind::module_ &pymodule)
         .def_rw("max_iterations", &vp::RRTCSettings::max_iterations)
         .def_rw("max_samples", &vp::RRTCSettings::max_samples)
         .def_rw("start_tree_first", &vp::RRTCSettings::start_tree_first);
+
+    nb::class_<vp::RRTStarSettings>(pymodule, "RRTStarSettings")
+        .def(nb::init<>())
+        .def_rw("range", &vp::RRTStarSettings::range)
+        .def_rw("dynamic_domain", &vp::RRTStarSettings::dynamic_domain)
+        .def_rw("radius", &vp::RRTStarSettings::radius)
+        .def_rw("alpha", &vp::RRTStarSettings::alpha)
+        .def_rw("min_radius", &vp::RRTStarSettings::min_radius)
+        .def_rw("rewire_factor", &vp::RRTStarSettings::rewire_factor)
+        .def_rw("force_max_iters", &vp::RRTStarSettings::force_max_iters)
+        .def_rw("max_iterations", &vp::RRTStarSettings::max_iterations)
+        .def_rw("max_samples", &vp::RRTStarSettings::max_samples);
 
     nb::class_<vp::AORRTCSettings>(pymodule, "AORRTCSettings")
         .def(nb::init<>())
