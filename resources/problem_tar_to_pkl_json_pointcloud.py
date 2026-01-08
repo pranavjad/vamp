@@ -8,6 +8,7 @@ from fire import Fire
 import json
 from tqdm import tqdm
 import numpy as np
+import pybullet as pb
 
 import vamp
 from vamp import pointcloud as vpc
@@ -102,10 +103,16 @@ def visualize_pointclouds(robot, problems):
         return
 
     sim = vpb.PyBulletSimulator(str(robot_dir / f"{robot}_spherized.urdf"), vamp_module.joint_names(), True)
+    conn = sim.client.getConnectionInfo()
+    if conn.get("connectionMethod") != pb.GUI:
+        print("PyBullet is not running in GUI mode; no window will appear.")
+        return
+
     key_next = ord('n')
     key_prev = ord('p')
     key_quit = ord('q')
 
+    print("Launching pointcloud viewer...")
     print("Press `n` for next, `p` for previous, `q` to quit.")
 
     idx = 0
@@ -135,6 +142,7 @@ def visualize_pointclouds(robot, problems):
                 idx = (idx - 1) % len(ordered)
                 break
 
+            sim.client.stepSimulation()
             time.sleep(0.016)
 
 
